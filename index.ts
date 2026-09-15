@@ -6,7 +6,6 @@ import NodeCache from "@cacheable/node-cache";
 import {
   DisconnectReason,
   jidNormalizedUser,
-  fetchLatestBaileysVersion,
   getAggregateVotesInPollMessage,
   makeCacheableSignalKeyStore,
   proto,
@@ -76,11 +75,11 @@ const startWhatsApp = async () => {
       "baileys_auth_info"
     );
 
-  const { version, isLatest } =
-    await fetchLatestBaileysVersion();
+  // Versión fija de WhatsApp Web
+  const version = [2, 3000, 1033899626];
 
   console.log(
-    `using WA v${version.join(".")}, isLatest: ${isLatest}`
+    `using fixed WA v${version.join(".")}`
   );
 
   const groupCache = new NodeCache({
@@ -120,13 +119,6 @@ const startWhatsApp = async () => {
    * =====================================================
    * VINCULACIÓN AUTOMÁTICA
    * =====================================================
-   *
-   * Railway no permite utilizar readline.
-   *
-   * Por eso usamos directamente OWNER.
-   *
-   * Además, esperamos a que Baileys llegue a
-   * "connecting" antes de pedir el código.
    */
 
   if (!whatsapp.authState.creds.registered) {
@@ -142,7 +134,7 @@ const startWhatsApp = async () => {
       }
 
       console.log(
-        `Esperando conexión de WhatsApp para generar el código...`
+        "Esperando conexión de WhatsApp para generar el código..."
       );
 
       const pairingCode =
@@ -173,10 +165,6 @@ const startWhatsApp = async () => {
                   return;
                 }
 
-                /*
-                 * Baileys ya está intentando conectarse.
-                 * Ahora sí podemos pedir el código.
-                 */
                 if (
                   update.connection === "connecting" ||
                   !!update.qr
@@ -290,9 +278,6 @@ const startWhatsApp = async () => {
         }
       }
 
-      /*
-       * Guardar credenciales automáticamente.
-       */
       if (events["creds.update"]) {
         await saveCreds();
       }
@@ -309,9 +294,6 @@ const startWhatsApp = async () => {
         );
       }
 
-      /*
-       * Historial de WhatsApp.
-       */
       if (
         events["messaging-history.set"]
       ) {
