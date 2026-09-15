@@ -3,7 +3,6 @@ dotenv.config();
 
 import { Boom } from "@hapi/boom";
 import NodeCache from "@cacheable/node-cache";
-import * as readline from "readline";
 import {
   DisconnectReason,
   jidNormalizedUser,
@@ -16,31 +15,32 @@ import {
 } from "baileys";
 
 import type { SocketConfig, WASocket, AnyMessageContent } from "baileys";
-import makeWASocket from './src/utils/socket.js';
+import makeWASocket from "./src/utils/socket.js";
 import * as P from "pino";
 import { procMsg } from "./src/utils/msg.js";
 import { prMsg } from "./src/utils/fmt.js";
 import CmdRegis from "./src/commands/register.js";
 
 try {
-    await CmdRegis.load();
-    await CmdRegis.watch();
+  await CmdRegis.load();
+  await CmdRegis.watch();
 } catch (error) {
-    console.error("Error loading or watching commands:", error);
+  console.error("Error loading or watching commands:", error);
 }
-import handler from "./src/commands/handler.js";  
+
+import handler from "./src/commands/handler.js";
 
 interface LocalStore {
-   messages: Record<string, any>;
-   groupMetadata: Record<string, any>;
-   contacts: Record<string, any>;
+  messages: Record<string, any>;
+  groupMetadata: Record<string, any>;
+  contacts: Record<string, any>;
 }
 
 const LocalStore: LocalStore = {
-    messages: {},
-    groupMetadata: {},
-    contacts: {}
-}
+  messages: {},
+  groupMetadata: {},
+  contacts: {},
+};
 
 const logger = P.pino({
   level: "silent",
@@ -48,24 +48,13 @@ const logger = P.pino({
 
 const msgRetryCounterCache = new NodeCache() as any;
 
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
-});
-
-rl.on('close', () => {
-  console.log('Readline interface closed');
-});
-
-const question = (text: string) =>
-  new Promise<string>((resolve, reject) => {
-    try {
-      rl.question(text, resolve);
-    } catch (error) {
-      console.error('Error with readline question:', error);
-      reject(error);
-    }
-  });
+/*
+ * Railway no permite usar readline de forma interactiva.
+ * Por eso el número se obtiene directamente desde OWNER.
+ */
+const question = async (_text: string): Promise<string> => {
+  return (process.env.OWNER || "").replace(/\D/g, "");
+};
 
 const startWhatsApp = async () => {
   async function getMessage(
@@ -75,34 +64,72 @@ const startWhatsApp = async () => {
     return proto.Message.fromObject({ conversation: "test" });
   }
 
-  const { state, saveCreds } = await useMultiFileAuthState("baileys_auth_info");
-  const { version, isLatest } = await fetchLatestBaileysVersion();
-  console.log(`using WA v${version.join(".")}, isLatest: ${isLatest}`);
-  const groupCache = new NodeCache({stdTTL: 5 * 60, useClones: false});
-  
-  const config: Partial<SocketConfig> = {
-  version,
-  printQRInTerminal: false,
-  logger,
-  auth: {
-   creds: state.creds,
-    keys: makeCacheableSignalKeyStore(state.keys, logger),
-    },
-  msgRetryCounterCache,
-  generateHighQualityLinkPreview: true,
-  getMessage,
-  cachedGroupMetadata: async (jid) => Promise.resolve(groupCache.get(jid) as any),
-};
+  const { state, saveCreds } =
+    await useMultiFileAuthState("baileys_auth_info");
 
-const whatsapp = await makeWASocket(config as SocketConfig);
+  const { version, isLatest } =
+    await fetchLatestBaileysVersion();
+
+  console.log(
+    `using WA v${version.join(".")}, isLatest: ${isLatest}`
+  );
+
+  const groupCache = new NodeCache({
+    stdTTL: 5 * 60,
+    useClones: false,
+  });
+
+  const config: Partial<SocketConfig> = {
+    version,
+    printQRInTerminal: false,
+    logger,
+    auth: {
+      creds: state.creds,
+      keys: makeCacheableSignalKeyStore(state.keys, logger),
+    },
+    msgRetryCounterCache,
+    generateHighQualityLinkPreview: true,
+    getMessage,
+    cachedGroupMetadata: async (jid) =>
+      Promise.resolve(groupCache.get(jid) as any),
+  };
+
+  const whatsapp = await makeWASocket(config as SocketConfig);
+
+  /*
+   * Si la cuenta todavía no está vinculada,
+   * Railway utilizará automáticamente OWNER
+   * para generar el código de vinculación.
+   */
   if (!whatsapp.authState.creds.registered) {
     try {
-      const phoneNumber = await question("Please enter your phone number:\n");
-      const code = await whatsapp.requestPairingCode(phoneNumber);
+      const phoneNumber = await question(
+        "Please enter your phone number:\n"
+      );
+
+      if (!phoneNumber) {
+        throw new Error(
+          "La variable OWNER no está configurada."
+        );
+      }
+
+      console.log(
+        `Generando código de vinculación para: ${phoneNumber}`
+      );
+
+      const code =
+        await whatsapp.requestPairingCode(phoneNumber);
+
       console.log(`Pairing code: ${code}`);
     } catch (error) {
-      console.error("Error getting phone number:", (error as Error).message);
-      console.log("Continuing without phone number registration...");
+      console.error(
+        "Error getting phone number:",
+        (error as Error).message
+      );
+
+      console.log(
+        "No se pudo generar el código de vinculación."
+      );
     }
   }
 
@@ -110,19 +137,25 @@ const whatsapp = await makeWASocket(config as SocketConfig);
     if (events["connection.update"]) {
       const update = events["connection.update"];
       const { connection, lastDisconnect } = update;
+
       if (connection === "close") {
         if (
           (lastDisconnect?.error as Boom)?.output?.statusCode !==
           DisconnectReason.loggedOut
         ) {
-          console.log("Restarting...")
+          console.log("Restarting...");
           startWhatsApp();
         } else {
-          console.log("Connection closed. You are logged out.");
+          console.log(
+            "Connection closed. You are logged out."
+          );
         }
       }
+
       if (connection === "open") {
-         console.log("Success Connect to WhatsApp")
+        console.log(
+          "Success Connect to WhatsApp"
+        );
       }
     }
 
@@ -139,59 +172,150 @@ const whatsapp = await makeWASocket(config as SocketConfig);
     }
 
     if (events["messaging-history.set"]) {
-      const { chats, contacts, messages, isLatest, progress, syncType } =
-        events["messaging-history.set"];
-      if (syncType === proto.HistorySync.HistorySyncType.ON_DEMAND) {
-        console.log("received on-demand history sync, messages=", messages);
+      const {
+        chats,
+        contacts,
+        messages,
+        isLatest,
+        progress,
+        syncType,
+      } = events["messaging-history.set"];
+
+      if (
+        syncType ===
+        proto.HistorySync.HistorySyncType.ON_DEMAND
+      ) {
+        console.log(
+          "received on-demand history sync, messages=",
+          messages
+        );
       }
+
       console.log(
-        `recv ${chats.length} chats, ${contacts.length} contacts, ${messages.length} msgs (is latest: ${isLatest}, progress: ${progress}%), type: ${syncType}`,
+        `recv ${chats.length} chats, ${contacts.length} contacts, ${messages.length} msgs (is latest: ${isLatest}, progress: ${progress}%), type: ${syncType}`
       );
     }
 
     if (events["messages.upsert"]) {
       const upsert = events["messages.upsert"];
-      if (LocalStore.groupMetadata && Object.keys(LocalStore.groupMetadata).length < 1) LocalStore.groupMetadata = await whatsapp.groupFetchAllParticipating();
+
+      if (
+        LocalStore.groupMetadata &&
+        Object.keys(LocalStore.groupMetadata).length < 1
+      ) {
+        LocalStore.groupMetadata =
+          await whatsapp.groupFetchAllParticipating();
+      }
+
       if (!!upsert.requestId) {
         console.log(
-          "placeholder message received for request of id=" + upsert.requestId,
-          upsert,
+          "placeholder message received for request of id=" +
+            upsert.requestId,
+          upsert
         );
       }
+
       for (let msg of upsert.messages) {
-        const jid = msg.key.participant ?? msg.key.remoteJid
+        const jid =
+          msg.key.participant ?? msg.key.remoteJid;
+
         if (jid) {
-          if (jid && !LocalStore.messages[jid]) LocalStore.messages[jid] = [msg]
+          if (!LocalStore.messages[jid]) {
+            LocalStore.messages[jid] = [msg];
+          }
+
           LocalStore.messages[jid].push(msg);
         }
+
         if (upsert.type == "notify") {
-        const processedMessage = await procMsg(msg as any, whatsapp, LocalStore);
-        if (!processedMessage) return
-        const oldSock = whatsapp as WASocket
-        if (processedMessage.isGroup) {
-            const store = processedMessage?.metadata
+          const processedMessage = await procMsg(
+            msg as any,
+            whatsapp,
+            LocalStore
+          );
+
+          if (!processedMessage) return;
+
+          const oldSock = whatsapp as WASocket;
+
+          if (processedMessage.isGroup) {
+            const store = processedMessage?.metadata;
+
             if (store) {
-             const metadata = await whatsapp.groupMetadata(processedMessage.chat)
-                if (typeof store.ephemeralDuration === "undefined") store.ephemeralDuration = 0
-                if (store.ephemeralDuration && store.ephemeralDuration !== metadata?.ephemeralDuration) {
-                  console.log(`ephemeralDuration for ${processedMessage.chat} has changed!\nupdate groupMetadata...`)
-                   if (processedMessage) processedMessage.metadata = metadata
-                  console.log(processedMessage.metadata?.ephemeralDuration);
-                  groupCache.set(processedMessage.chat,metadata);
+              const metadata =
+                await whatsapp.groupMetadata(
+                  processedMessage.chat
+                );
+
+              if (
+                typeof store.ephemeralDuration ===
+                "undefined"
+              ) {
+                store.ephemeralDuration = 0;
+              }
+
+              if (
+                store.ephemeralDuration &&
+                store.ephemeralDuration !==
+                  metadata?.ephemeralDuration
+              ) {
+                console.log(
+                  `ephemeralDuration for ${processedMessage.chat} has changed!\nupdate groupMetadata...`
+                );
+
+                if (processedMessage) {
+                  processedMessage.metadata = metadata;
                 }
+
+                console.log(
+                  processedMessage.metadata
+                    ?.ephemeralDuration
+                );
+
+                groupCache.set(
+                  processedMessage.chat,
+                  metadata
+                );
+              }
             }
-        }
-        const originalSendMessage = whatsapp.sendMessage.bind(whatsapp);
-        whatsapp.sendMessage = async(jid:string, content:AnyMessageContent, options:any = {}) => {
-            return originalSendMessage(jid, content, {
-            ...options,
-            ephemeralExpiration: processedMessage.isGroup
-            ? (processedMessage.metadata && processedMessage.metadata.ephemeralDuration) || null
-            : ((processedMessage.message as { [key: string]: any })[processedMessage.type]?.contextInfo?.expiration) || null,
-          })
-        }
-        await handler.handleCommand(processedMessage, whatsapp, LocalStore);
-          prMsg(processedMessage); 
+          }
+
+          const originalSendMessage =
+            whatsapp.sendMessage.bind(whatsapp);
+
+          whatsapp.sendMessage = async (
+            jid: string,
+            content: AnyMessageContent,
+            options: any = {}
+          ) => {
+            return originalSendMessage(
+              jid,
+              content,
+              {
+                ...options,
+                ephemeralExpiration:
+                  processedMessage.isGroup
+                    ? (processedMessage.metadata &&
+                        processedMessage.metadata
+                          .ephemeralDuration) ||
+                      null
+                    : (
+                        (processedMessage.message as {
+                          [key: string]: any;
+                        })[processedMessage.type]
+                          ?.contextInfo?.expiration
+                      ) || null,
+              }
+            );
+          };
+
+          await handler.handleCommand(
+            processedMessage,
+            whatsapp,
+            LocalStore
+          );
+
+          prMsg(processedMessage);
         }
       }
     }
@@ -200,129 +324,218 @@ const whatsapp = await makeWASocket(config as SocketConfig);
       for (const { update } of events["messages.update"]) {
         if (update.pollUpdates) {
           const pollCreation: proto.IMessage = {};
+
           if (pollCreation) {
             console.log(
               "got poll update, aggregation: ",
               getAggregateVotesInPollMessage({
                 message: pollCreation,
                 pollUpdates: update.pollUpdates,
-              }),
+              })
             );
           }
         }
       }
     }
+
     if (events["contacts.upsert"]) {
-         const update = events["contacts.upsert"];
-        for (let contact of update) {
-          let id = jidNormalizedUser(contact.id);
-          if (LocalStore && LocalStore.contacts)
-            LocalStore.contacts[id] = { ...(contact || {}), isContact: true };
-         }
+      const update = events["contacts.upsert"];
+
+      for (let contact of update) {
+        let id = jidNormalizedUser(contact.id);
+
+        if (LocalStore && LocalStore.contacts) {
+          LocalStore.contacts[id] = {
+            ...(contact || {}),
+            isContact: true,
+          };
+        }
       }
-    
+    }
+
     if (events["contacts.update"]) {
       for (const contact of events["contacts.update"]) {
         if (typeof contact.imgUrl !== "undefined") {
           const newUrl =
             contact.imgUrl === null
               ? null
-              : await whatsapp!.profilePictureUrl(contact.id!).catch(() => null);
-          console.log(`contact ${contact.id} has a new profile pic: ${newUrl}`);
+              : await whatsapp
+                  .profilePictureUrl(contact.id!)
+                  .catch(() => null);
+
+          console.log(
+            `contact ${contact.id} has a new profile pic: ${newUrl}`
+          );
         }
+
         let id = jidNormalizedUser(contact.id);
-        if (LocalStore && LocalStore.contacts)
+
+        if (LocalStore && LocalStore.contacts) {
           LocalStore.contacts[id] = {
             ...(LocalStore.contacts?.[id] || {}),
             ...(contact || {}),
           };
-      }
-    }
-    if (events["groups.upsert"]) {
-      const newGroups = events["groups.upsert"];
-      for (const groupMetadata of newGroups) {
-        try {
-          groupCache.set(groupMetadata.id, groupMetadata);
-          LocalStore.groupMetadata[groupMetadata.id] = groupMetadata;
-        } catch (error) {
-          console.error(`[GROUPS.UPSERT] Error adding group ${groupMetadata.id}:`, error);
         }
       }
     }
+
+    if (events["groups.upsert"]) {
+      const newGroups = events["groups.upsert"];
+
+      for (const groupMetadata of newGroups) {
+        try {
+          groupCache.set(
+            groupMetadata.id,
+            groupMetadata
+          );
+
+          LocalStore.groupMetadata[
+            groupMetadata.id
+          ] = groupMetadata;
+        } catch (error) {
+          console.error(
+            `[GROUPS.UPSERT] Error adding group ${groupMetadata.id}:`,
+            error
+          );
+        }
+      }
+    }
+
     if (events["groups.update"]) {
       const updates = events["groups.update"];
+
       for (const update of updates) {
         const id = update.id;
+
         if (!id) continue;
+
         try {
-          const metadata = await whatsapp.groupMetadata(id);
+          const metadata =
+            await whatsapp.groupMetadata(id);
+
           groupCache.set(id, metadata);
+
           if (LocalStore.groupMetadata[id]) {
             LocalStore.groupMetadata[id] = {
               ...(LocalStore.groupMetadata[id] || {}),
               ...metadata,
             };
           } else {
-            LocalStore.groupMetadata[id] = metadata;
+            LocalStore.groupMetadata[id] =
+              metadata;
           }
         } catch (error) {
-          console.error(`[GROUPS.UPDATE] Error updating group ${id}:`, error);
+          console.error(
+            `[GROUPS.UPDATE] Error updating group ${id}:`,
+            error
+          );
         }
       }
     }
+
     if (events["group-participants.update"]) {
-      const { id, participants, action } = events["group-participants.update"];
+      const {
+        id,
+        participants,
+        action,
+      } = events["group-participants.update"];
+
       if (id) {
         try {
-          const metadata = await whatsapp.groupMetadata(id);
+          const metadata =
+            await whatsapp.groupMetadata(id);
+
           groupCache.set(id, metadata);
+
           LocalStore.groupMetadata[id] = metadata;
-          if (LocalStore.groupMetadata[id] && LocalStore.groupMetadata[id].participants) {
+
+          if (
+            LocalStore.groupMetadata[id] &&
+            LocalStore.groupMetadata[id].participants
+          ) {
             switch (action) {
               case "add":
-                LocalStore.groupMetadata[id].participants.push(
+                LocalStore.groupMetadata[
+                  id
+                ].participants.push(
                   ...participants.map((jid) => ({
                     id: jidNormalizedUser(jid),
                     admin: null,
-                  })),
+                  }))
                 );
                 break;
+
               case "demote":
-                for (const participant of LocalStore.groupMetadata[id].participants) {
-                  let participantId = jidNormalizedUser(participant.id);
-                  if (participants.includes(participantId)) {
+                for (const participant of
+                  LocalStore.groupMetadata[id]
+                    .participants) {
+                  let participantId =
+                    jidNormalizedUser(
+                      participant.id
+                    );
+
+                  if (
+                    participants.includes(
+                      participantId
+                    )
+                  ) {
                     participant.admin = null;
                   }
                 }
                 break;
+
               case "promote":
-                for (const participant of LocalStore.groupMetadata[id].participants) {
-                  let participantId = jidNormalizedUser(participant.id);
-                  if (participants.includes(participantId)) {
+                for (const participant of
+                  LocalStore.groupMetadata[id]
+                    .participants) {
+                  let participantId =
+                    jidNormalizedUser(
+                      participant.id
+                    );
+
+                  if (
+                    participants.includes(
+                      participantId
+                    )
+                  ) {
                     participant.admin = "admin";
                   }
                 }
                 break;
+
               case "remove":
-                LocalStore.groupMetadata[id].participants = LocalStore.groupMetadata[id].participants.filter(
-                  (p: { id: string }) => !participants.includes(jidNormalizedUser(p.id)),
-                );
+                LocalStore.groupMetadata[
+                  id
+                ].participants =
+                  LocalStore.groupMetadata[
+                    id
+                  ].participants.filter(
+                    (p: { id: string }) =>
+                      !participants.includes(
+                        jidNormalizedUser(p.id)
+                      )
+                  );
                 break;
             }
           }
         } catch (error) {
-          console.error(`[GROUP-PARTICIPANTS.UPDATE] Error processing group ${id}:`, error);
+          console.error(
+            `[GROUP-PARTICIPANTS.UPDATE] Error processing group ${id}:`,
+            error
+          );
         }
       }
     }
 
     if (events["chats.delete"]) {
-      console.log("chats deleted ", events["chats.delete"]);
+      console.log(
+        "chats deleted ",
+        events["chats.delete"]
+      );
     }
   });
 
   return whatsapp;
-
-}
+};
 
 startWhatsApp();
