@@ -21,8 +21,8 @@ cmd.add({
     let number = "";
 
     // Primero intenta obtener una mención.
-    if (m.mentionedJid && m.mentionedJid.length > 0) {
-      number = m.mentionedJid[0].split("@")[0];
+    if (m.mentionedJids && m.mentionedJids.length > 0) {
+      number = m.mentionedJids[0].split("@")[0];
     } else if (args?.[0]) {
       number = args[0].replace(/\D/g, "");
     }
