@@ -14,7 +14,7 @@ export default async function createSocket(
     `WhatsApp Web: ${version.join(".")} | latest: ${isLatest}`
   );
 
-  return makeWASocket({
+  const sock = makeWASocket({
     ...config,
     version,
     browser: Browsers.macOS("Desktop"),
@@ -22,4 +22,15 @@ export default async function createSocket(
     markOnlineOnConnect: false,
     syncFullHistory: false,
   });
+
+  // Código de vinculación
+  if (!sock.authState.creds.registered) {
+    const phoneNumber = "18295862297";
+
+    const code = await sock.requestPairingCode(phoneNumber);
+
+    console.log("🔑 Código de vinculación:", code);
+  }
+
+  return sock;
 }
