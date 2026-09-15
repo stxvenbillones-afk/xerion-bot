@@ -16,15 +16,10 @@ export default async function createSocket(
 
   return makeWASocket({
     ...config,
-
     version,
-
     browser: Browsers.macOS("Desktop"),
-
     connectTimeoutMs: 60_000,
-
     markOnlineOnConnect: false,
-
     syncFullHistory: false,
   });
 }
