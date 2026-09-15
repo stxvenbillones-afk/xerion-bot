@@ -14,7 +14,6 @@ import {
 
 import type {
   SocketConfig,
-  WASocket,
   AnyMessageContent,
 } from "baileys";
 
@@ -80,7 +79,7 @@ const startWhatsApp = async () => {
     useClones: false,
   });
 
-  const config: SocketConfig = {
+  const config: Partial<SocketConfig> = {
     version,
 
     printQRInTerminal: false,
@@ -108,7 +107,9 @@ const startWhatsApp = async () => {
   };
 
   const whatsapp =
-    await makeWASocket(config);
+    await makeWASocket(
+      config as SocketConfig
+    );
 
   /*
    * =====================================================
@@ -136,7 +137,7 @@ const startWhatsApp = async () => {
         } = update;
 
         /*
-         * Mostrar QR en los logs de Railway
+         * Mostrar QR
          */
 
         if (qr) {
@@ -282,7 +283,7 @@ const startWhatsApp = async () => {
             LocalStore.groupMetadata =
               await whatsapp.groupFetchAllParticipating();
           } catch {
-            // Ignorar si todavía no está disponible.
+            // Todavía no disponible.
           }
         }
 
@@ -599,6 +600,10 @@ const startWhatsApp = async () => {
 
             LocalStore.groupMetadata[id] =
               metadata;
+
+            console.log(
+              `Participantes actualizados: ${action}`
+            );
           } catch (error) {
             console.error(
               "Error actualizando participantes:",
