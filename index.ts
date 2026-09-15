@@ -3,6 +3,7 @@ dotenv.config();
 
 import { Boom } from "@hapi/boom";
 import NodeCache from "@cacheable/node-cache";
+import qrcode from "qrcode-terminal";
 
 import {
   DisconnectReason,
@@ -71,7 +72,7 @@ const startWhatsApp = async () => {
   });
 
   const config: Partial<SocketConfig> = {
-    printQRInTerminal: true,
+    printQRInTerminal: false,
 
     logger,
 
@@ -118,6 +119,42 @@ const startWhatsApp = async () => {
           lastDisconnect,
         } = update;
 
+        /*
+         * =================================================
+         * QR
+         * =================================================
+         */
+
+        if (update.qr) {
+          console.log("");
+          console.log(
+            "=========================================="
+          );
+          console.log(
+            "📱 ESCANEA ESTE QR PARA VINCULAR XERION BOT"
+          );
+          console.log(
+            "=========================================="
+          );
+          console.log("");
+
+          qrcode.generate(update.qr, {
+            small: true,
+          });
+
+          console.log("");
+          console.log(
+            "=========================================="
+          );
+          console.log("");
+        }
+
+        /*
+         * =================================================
+         * CONECTADO
+         * =================================================
+         */
+
         if (connection === "open") {
           console.log("");
           console.log(
@@ -131,6 +168,12 @@ const startWhatsApp = async () => {
           );
           console.log("");
         }
+
+        /*
+         * =================================================
+         * DESCONEXIÓN
+         * =================================================
+         */
 
         if (connection === "close") {
           const statusCode =
