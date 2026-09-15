@@ -75,8 +75,17 @@ const startWhatsApp = async () => {
       "baileys_auth_info"
     );
 
-  // Versión fija de WhatsApp Web
-  const version = [2, 3000, 1033899626];
+  /*
+   * =====================================================
+   * VERSIÓN DE WHATSAPP WEB
+   * =====================================================
+   */
+
+  const version: [number, number, number] = [
+    2,
+    3000,
+    1033899626,
+  ];
 
   console.log(
     `using fixed WA v${version.join(".")}`
@@ -278,6 +287,10 @@ const startWhatsApp = async () => {
         }
       }
 
+      /*
+       * Guardar credenciales automáticamente.
+       */
+
       if (events["creds.update"]) {
         await saveCreds();
       }
@@ -293,6 +306,10 @@ const startWhatsApp = async () => {
           events["labels.edit"]
         );
       }
+
+      /*
+       * Historial de WhatsApp.
+       */
 
       if (
         events["messaging-history.set"]
@@ -385,9 +402,6 @@ const startWhatsApp = async () => {
             if (!processedMessage) {
               return;
             }
-
-            const oldSock =
-              whatsapp as WASocket;
 
             if (
               processedMessage.isGroup
