@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@cacheable/node-cache": "^1.7.3",
-    "baileys": "^6.7.20",
+    "baileys": "6.7.24",
     "chalk": "^5.6.2",
     "chokidar": "^4.0.3",
     "dotenv": "^17.2.3",
