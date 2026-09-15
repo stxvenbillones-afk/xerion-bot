@@ -16,6 +16,8 @@ export interface Command {
   alias?: string[];
   isOwner?: boolean;
   isGroup?: boolean;
+  isStaff?: boolean;
+  isPremium?: boolean;
   isPrivate?: boolean;
   isSelf?: boolean;
   desc?: string;
