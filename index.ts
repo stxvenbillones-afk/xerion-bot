@@ -11,7 +11,6 @@ import {
   makeCacheableSignalKeyStore,
   proto,
   useMultiFileAuthState,
-  fetchLatestWaWebVersion,
 } from "baileys";
 
 import type {
@@ -45,8 +44,6 @@ const logger = P.pino({
 
 const msgRetryCounterCache = new NodeCache() as any;
 
-let pairingRequested = false;
-
 const startWhatsApp = async () => {
   async function getMessage(
     key: {
@@ -68,30 +65,13 @@ const startWhatsApp = async () => {
       "baileys_auth_info"
     );
 
-  /*
-   * =====================================================
-   * OBTENER VERSIÓN ACTUAL DE WHATSAPP WEB
-   * =====================================================
-   */
-
-  const {
-    version,
-    isLatest,
-  } = await fetchLatestWaWebVersion({});
-
-  console.log(
-    `WhatsApp Web: ${version.join(".")} | latest: ${isLatest}`
-  );
-
   const groupCache = new NodeCache({
     stdTTL: 5 * 60,
     useClones: false,
   });
 
   const config: Partial<SocketConfig> = {
-    version,
-
-    printQRInTerminal: false,
+    printQRInTerminal: true,
 
     logger,
 
@@ -120,12 +100,6 @@ const startWhatsApp = async () => {
       config as SocketConfig
     );
 
-  /*
-   * =====================================================
-   * EVENTOS DE WHATSAPP
-   * =====================================================
-   */
-
   whatsapp.ev.process(
     async (events) => {
 
@@ -144,98 +118,6 @@ const startWhatsApp = async () => {
           lastDisconnect,
         } = update;
 
-        /*
-         * =================================================
-         * CÓDIGO DE VINCULACIÓN
-         * =================================================
-         */
-
-        if (
-          !state.creds.registered &&
-          !pairingRequested
-        ) {
-          pairingRequested = true;
-
-          const phoneNumber =
-            process.env.OWNER?.replace(/\D/g, "");
-
-          if (!phoneNumber) {
-            console.error(
-              "❌ No se encontró OWNER en las variables de Railway."
-            );
-
-            pairingRequested = false;
-            return;
-          }
-
-          try {
-            /*
-             * Esperar a que el WebSocket
-             * termine de inicializar.
-             */
-
-            await new Promise((resolve) =>
-              setTimeout(resolve, 3000)
-            );
-
-            const code =
-              await whatsapp.requestPairingCode(
-                phoneNumber
-              );
-
-            console.log("");
-            console.log(
-              "=========================================="
-            );
-            console.log(
-              "🔐 CÓDIGO DE VINCULACIÓN DE XERION BOT"
-            );
-            console.log(
-              "=========================================="
-            );
-            console.log("");
-            console.log(
-              `        ${code}`
-            );
-            console.log("");
-            console.log(
-              "=========================================="
-            );
-            console.log(
-              "📱 EN TU IPHONE:"
-            );
-            console.log(
-              "WhatsApp > Configuración"
-            );
-            console.log(
-              "> Dispositivos vinculados"
-            );
-            console.log(
-              "> Vincular dispositivo"
-            );
-            console.log(
-              "> Vincular con número de teléfono"
-            );
-            console.log(
-              "=========================================="
-            );
-            console.log("");
-          } catch (error) {
-            pairingRequested = false;
-
-            console.error(
-              "❌ No se pudo generar el código de vinculación:",
-              error
-            );
-          }
-        }
-
-        /*
-         * =================================================
-         * CONECTADO
-         * =================================================
-         */
-
         if (connection === "open") {
           console.log("");
           console.log(
@@ -250,12 +132,6 @@ const startWhatsApp = async () => {
           console.log("");
         }
 
-        /*
-         * =================================================
-         * DESCONEXIÓN
-         * =================================================
-         */
-
         if (connection === "close") {
           const statusCode =
             (lastDisconnect?.error as Boom)
@@ -266,11 +142,6 @@ const startWhatsApp = async () => {
             statusCode
           );
 
-          /*
-           * 405 = cliente/versión rechazada
-           * 428 = conexión cerrada antes del pairing
-           */
-
           if (
             statusCode !==
             DisconnectReason.loggedOut
@@ -278,8 +149,6 @@ const startWhatsApp = async () => {
             console.log(
               "🔄 Reiniciando conexión..."
             );
-
-            pairingRequested = false;
 
             setTimeout(() => {
               startWhatsApp();
