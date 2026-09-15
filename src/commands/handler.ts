@@ -1,7 +1,12 @@
 import cmd, { type Command } from "./map.js";
 import type { ProcMsg } from '../utils/msg.js';
 import type { CommandContext } from "./map.js";
-
+import {
+  isOwner,
+  isStaff,
+  isPremium,
+  isBanned,
+} from "../permissions.js";
 class CommandHandler {
   async handleCommand(
     processedMessage: ProcMsg,
