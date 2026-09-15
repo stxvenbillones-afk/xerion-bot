@@ -3,6 +3,7 @@ dotenv.config();
 
 import { Boom } from "@hapi/boom";
 import NodeCache from "@cacheable/node-cache";
+
 import {
   DisconnectReason,
   jidNormalizedUser,
@@ -19,7 +20,7 @@ import type {
 
 import makeWASocket from "./src/utils/socket.js";
 import * as P from "pino";
-import qrcode from "qrcode-terminal";
+
 import { procMsg } from "./src/utils/msg.js";
 import { prMsg } from "./src/utils/fmt.js";
 import CmdRegis from "./src/commands/register.js";
@@ -42,6 +43,8 @@ const logger = P.pino({
 });
 
 const msgRetryCounterCache = new NodeCache() as any;
+
+let pairingRequested = false;
 
 const startWhatsApp = async () => {
   async function getMessage(
@@ -122,7 +125,7 @@ const startWhatsApp = async () => {
 
       /*
        * =================================================
-       * CONEXIÓN Y QR
+       * CONEXIÓN
        * =================================================
        */
 
@@ -133,41 +136,92 @@ const startWhatsApp = async () => {
         const {
           connection,
           lastDisconnect,
-          qr,
         } = update;
 
         /*
-         * Mostrar QR
+         * =================================================
+         * CÓDIGO DE VINCULACIÓN
+         * =================================================
          */
 
-        if (qr) {
-          console.log("");
-          console.log(
-            "=========================================="
-          );
-          console.log(
-            "📱 ESCANEA ESTE QR CON WHATSAPP"
-          );
-          console.log(
-            "=========================================="
-          );
+        if (
+          !state.creds.registered &&
+          !pairingRequested
+        ) {
+          pairingRequested = true;
 
-          qrcode.generate(qr, {
-            small: true,
-          });
+          const phoneNumber =
+            process.env.OWNER?.replace(/\D/g, "");
 
-          console.log(
-            "=========================================="
-          );
-          console.log("");
-          console.log(
-            "WhatsApp > Dispositivos vinculados > Vincular dispositivo"
-          );
-          console.log("");
+          if (!phoneNumber) {
+            console.error(
+              "❌ No se encontró OWNER en las variables de Railway."
+            );
+            return;
+          }
+
+          try {
+            /*
+             * Esperamos un momento para que
+             * la conexión inicial esté lista.
+             */
+            await new Promise((resolve) =>
+              setTimeout(resolve, 3000)
+            );
+
+            const code =
+              await whatsapp.requestPairingCode(
+                phoneNumber
+              );
+
+            console.log("");
+            console.log(
+              "=========================================="
+            );
+            console.log(
+              "🔐 CÓDIGO DE VINCULACIÓN DE XERION BOT"
+            );
+            console.log(
+              "=========================================="
+            );
+            console.log("");
+            console.log(
+              `        ${code}`
+            );
+            console.log("");
+            console.log(
+              "=========================================="
+            );
+            console.log(
+              "📱 WhatsApp > Configuración"
+            );
+            console.log(
+              "   > Dispositivos vinculados"
+            );
+            console.log(
+              "   > Vincular dispositivo"
+            );
+            console.log(
+              "   > Vincular con número de teléfono"
+            );
+            console.log(
+              "=========================================="
+            );
+            console.log("");
+          } catch (error) {
+            pairingRequested = false;
+
+            console.error(
+              "❌ No se pudo generar el código de vinculación:",
+              error
+            );
+          }
         }
 
         /*
-         * Conectado
+         * =================================================
+         * CONECTADO
+         * =================================================
          */
 
         if (connection === "open") {
@@ -185,7 +239,9 @@ const startWhatsApp = async () => {
         }
 
         /*
-         * Desconexión
+         * =================================================
+         * DESCONEXIÓN
+         * =================================================
          */
 
         if (connection === "close") {
@@ -205,6 +261,8 @@ const startWhatsApp = async () => {
             console.log(
               "🔄 Reiniciando conexión..."
             );
+
+            pairingRequested = false;
 
             setTimeout(() => {
               startWhatsApp();
@@ -240,8 +298,6 @@ const startWhatsApp = async () => {
           chats,
           contacts,
           messages,
-          isLatest,
-          progress,
           syncType,
         } =
           events[
@@ -579,7 +635,6 @@ const startWhatsApp = async () => {
       ) {
         const {
           id,
-          participants,
           action,
         } =
           events[
@@ -650,5 +705,11 @@ try {
     error
   );
 }
+
+/*
+ * =====================================================
+ * INICIAR XERION BOT
+ * =====================================================
+ */
 
 startWhatsApp();
