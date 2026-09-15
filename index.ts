@@ -20,20 +20,10 @@ import type {
 
 import makeWASocket from "./src/utils/socket.js";
 import * as P from "pino";
+import qrcode from "qrcode-terminal";
 import { procMsg } from "./src/utils/msg.js";
 import { prMsg } from "./src/utils/fmt.js";
 import CmdRegis from "./src/commands/register.js";
-
-try {
-  await CmdRegis.load();
-  await CmdRegis.watch();
-} catch (error) {
-  console.error(
-    "Error loading or watching commands:",
-    error
-  );
-}
-
 import handler from "./src/commands/handler.js";
 
 interface LocalStore {
@@ -75,12 +65,6 @@ const startWhatsApp = async () => {
       "baileys_auth_info"
     );
 
-  /*
-   * =====================================================
-   * VERSIÓN DE WHATSAPP WEB
-   * =====================================================
-   */
-
   const version: [number, number, number] = [
     2,
     3000,
@@ -88,7 +72,7 @@ const startWhatsApp = async () => {
   ];
 
   console.log(
-    `using fixed WA v${version.join(".")}`
+    `Using WhatsApp Web v${version.join(".")}`
   );
 
   const groupCache = new NodeCache({
@@ -96,9 +80,11 @@ const startWhatsApp = async () => {
     useClones: false,
   });
 
-  const config: Partial<SocketConfig> = {
+  const config: SocketConfig = {
     version,
+
     printQRInTerminal: false,
+
     logger,
 
     auth: {
@@ -110,7 +96,9 @@ const startWhatsApp = async () => {
     },
 
     msgRetryCounterCache,
+
     generateHighQualityLinkPreview: true,
+
     getMessage,
 
     cachedGroupMetadata: async (jid) =>
@@ -120,129 +108,7 @@ const startWhatsApp = async () => {
   };
 
   const whatsapp =
-    await makeWASocket(
-      config as SocketConfig
-    );
-
-  /*
-   * =====================================================
-   * VINCULACIÓN AUTOMÁTICA
-   * =====================================================
-   */
-
-  if (!whatsapp.authState.creds.registered) {
-    try {
-      const phoneNumber = (
-        process.env.OWNER || ""
-      ).replace(/\D/g, "");
-
-      if (!phoneNumber) {
-        throw new Error(
-          "La variable OWNER no está configurada."
-        );
-      }
-
-      console.log(
-        "Esperando conexión de WhatsApp para generar el código..."
-      );
-
-      const pairingCode =
-        await new Promise<string>(
-          (resolve, reject) => {
-            let requested = false;
-            let finished = false;
-
-            const timeout =
-              setTimeout(() => {
-                if (finished) return;
-
-                finished = true;
-
-                reject(
-                  new Error(
-                    "Tiempo agotado esperando la conexión de WhatsApp."
-                  )
-                );
-              }, 30000);
-
-            const onConnectionUpdate =
-              async (update: {
-                connection?: string;
-                qr?: string;
-              }) => {
-                if (finished || requested) {
-                  return;
-                }
-
-                if (
-                  update.connection === "connecting" ||
-                  !!update.qr
-                ) {
-                  requested = true;
-
-                  console.log(
-                    "WhatsApp está listo. Generando código de vinculación..."
-                  );
-
-                  try {
-                    const code =
-                      await whatsapp.requestPairingCode(
-                        phoneNumber
-                      );
-
-                    finished = true;
-                    clearTimeout(timeout);
-
-                    resolve(code);
-                  } catch (error) {
-                    finished = true;
-                    clearTimeout(timeout);
-
-                    reject(error);
-                  }
-                }
-
-                if (
-                  update.connection === "close" &&
-                  !requested
-                ) {
-                  finished = true;
-                  clearTimeout(timeout);
-
-                  reject(
-                    new Error(
-                      "WhatsApp cerró la conexión antes de generar el código."
-                    )
-                  );
-                }
-              };
-
-            whatsapp.ev.on(
-              "connection.update",
-              onConnectionUpdate
-            );
-          }
-        );
-
-      console.log(
-        `Pairing code: ${pairingCode}`
-      );
-
-      console.log(
-        "Abre WhatsApp > Dispositivos vinculados > Vincular dispositivo > Vincular con número de teléfono."
-      );
-
-    } catch (error) {
-      console.error(
-        "Error getting phone number:",
-        (error as Error).message
-      );
-
-      console.log(
-        "No se pudo generar el código de vinculación."
-      );
-    }
-  }
+    await makeWASocket(config);
 
   /*
    * =====================================================
@@ -253,6 +119,12 @@ const startWhatsApp = async () => {
   whatsapp.ev.process(
     async (events) => {
 
+      /*
+       * =================================================
+       * CONEXIÓN Y QR
+       * =================================================
+       */
+
       if (events["connection.update"]) {
         const update =
           events["connection.update"];
@@ -260,55 +132,104 @@ const startWhatsApp = async () => {
         const {
           connection,
           lastDisconnect,
+          qr,
         } = update;
 
+        /*
+         * Mostrar QR en los logs de Railway
+         */
+
+        if (qr) {
+          console.log("");
+          console.log(
+            "=========================================="
+          );
+          console.log(
+            "📱 ESCANEA ESTE QR CON WHATSAPP"
+          );
+          console.log(
+            "=========================================="
+          );
+
+          qrcode.generate(qr, {
+            small: true,
+          });
+
+          console.log(
+            "=========================================="
+          );
+          console.log("");
+          console.log(
+            "WhatsApp > Dispositivos vinculados > Vincular dispositivo"
+          );
+          console.log("");
+        }
+
+        /*
+         * Conectado
+         */
+
+        if (connection === "open") {
+          console.log("");
+          console.log(
+            "=========================================="
+          );
+          console.log(
+            "✅ XERION BOT CONECTADO A WHATSAPP"
+          );
+          console.log(
+            "=========================================="
+          );
+          console.log("");
+        }
+
+        /*
+         * Desconexión
+         */
+
         if (connection === "close") {
-          if (
+          const statusCode =
             (lastDisconnect?.error as Boom)
-              ?.output?.statusCode !==
+              ?.output?.statusCode;
+
+          console.log(
+            "❌ Conexión cerrada:",
+            statusCode
+          );
+
+          if (
+            statusCode !==
             DisconnectReason.loggedOut
           ) {
             console.log(
-              "Restarting..."
+              "🔄 Reiniciando conexión..."
             );
 
-            startWhatsApp();
+            setTimeout(() => {
+              startWhatsApp();
+            }, 3000);
           } else {
             console.log(
-              "Connection closed. You are logged out."
+              "❌ La sesión fue cerrada. Vuelve a vincular WhatsApp."
             );
           }
-        }
-
-        if (connection === "open") {
-          console.log(
-            "Success Connect to WhatsApp"
-          );
         }
       }
 
       /*
-       * Guardar credenciales automáticamente.
+       * =================================================
+       * CREDENCIALES
+       * =================================================
        */
 
       if (events["creds.update"]) {
         await saveCreds();
       }
 
-      if (events["labels.association"]) {
-        console.log(
-          events["labels.association"]
-        );
-      }
-
-      if (events["labels.edit"]) {
-        console.log(
-          events["labels.edit"]
-        );
-      }
-
       /*
-       * Historial de WhatsApp.
+       * =================================================
+       * HISTORIAL
+       * =================================================
        */
 
       if (
@@ -332,13 +253,12 @@ const startWhatsApp = async () => {
             .HistorySyncType.ON_DEMAND
         ) {
           console.log(
-            "received on-demand history sync, messages=",
-            messages
+            "Received on-demand history sync"
           );
         }
 
         console.log(
-          `recv ${chats.length} chats, ${contacts.length} contacts, ${messages.length} msgs (is latest: ${isLatest}, progress: ${progress}%), type: ${syncType}`
+          `History: ${chats.length} chats, ${contacts.length} contacts, ${messages.length} messages`
         );
       }
 
@@ -358,16 +278,12 @@ const startWhatsApp = async () => {
             LocalStore.groupMetadata
           ).length < 1
         ) {
-          LocalStore.groupMetadata =
-            await whatsapp.groupFetchAllParticipating();
-        }
-
-        if (!!upsert.requestId) {
-          console.log(
-            "placeholder message received for request of id=" +
-              upsert.requestId,
-            upsert
-          );
+          try {
+            LocalStore.groupMetadata =
+              await whatsapp.groupFetchAllParticipating();
+          } catch {
+            // Ignorar si todavía no está disponible.
+          }
         }
 
         for (const msg of upsert.messages) {
@@ -379,9 +295,7 @@ const startWhatsApp = async () => {
             if (
               !LocalStore.messages[jid]
             ) {
-              LocalStore.messages[jid] = [
-                msg,
-              ];
+              LocalStore.messages[jid] = [];
             }
 
             LocalStore.messages[jid].push(
@@ -390,26 +304,36 @@ const startWhatsApp = async () => {
           }
 
           if (
-            upsert.type === "notify"
+            upsert.type !== "notify"
           ) {
-            const processedMessage =
-              await procMsg(
-                msg as any,
-                whatsapp,
-                LocalStore
-              );
+            continue;
+          }
 
-            if (!processedMessage) {
-              return;
-            }
+          const processedMessage =
+            await procMsg(
+              msg as any,
+              whatsapp,
+              LocalStore
+            );
 
-            if (
-              processedMessage.isGroup
-            ) {
-              const store =
-                processedMessage?.metadata;
+          if (!processedMessage) {
+            continue;
+          }
 
-              if (store) {
+          /*
+           * =================================================
+           * GRUPOS
+           * =================================================
+           */
+
+          if (
+            processedMessage.isGroup
+          ) {
+            const store =
+              processedMessage.metadata;
+
+            if (store) {
+              try {
                 const metadata =
                   await whatsapp.groupMetadata(
                     processedMessage.chat
@@ -424,82 +348,88 @@ const startWhatsApp = async () => {
                 }
 
                 if (
-                  store.ephemeralDuration &&
                   store.ephemeralDuration !==
-                    metadata?.ephemeralDuration
+                  metadata?.ephemeralDuration
                 ) {
-                  console.log(
-                    `ephemeralDuration for ${processedMessage.chat} has changed!\nupdate groupMetadata...`
-                  );
-
                   processedMessage.metadata =
                     metadata;
-
-                  console.log(
-                    processedMessage
-                      .metadata
-                      ?.ephemeralDuration
-                  );
 
                   groupCache.set(
                     processedMessage.chat,
                     metadata
                   );
                 }
+              } catch (error) {
+                console.error(
+                  "Error obteniendo metadata del grupo:",
+                  error
+                );
               }
             }
-
-            const originalSendMessage =
-              whatsapp.sendMessage.bind(
-                whatsapp
-              );
-
-            whatsapp.sendMessage =
-              async (
-                jid: string,
-                content: AnyMessageContent,
-                options: any = {}
-              ) => {
-                return originalSendMessage(
-                  jid,
-                  content,
-                  {
-                    ...options,
-
-                    ephemeralExpiration:
-                      processedMessage.isGroup
-                        ? (
-                            processedMessage
-                              .metadata &&
-                            processedMessage
-                              .metadata
-                              .ephemeralDuration
-                          ) || null
-                        : (
-                            (
-                              processedMessage.message as {
-                                [key: string]: any;
-                              }
-                            )[
-                              processedMessage
-                                .type
-                            ]?.contextInfo
-                              ?.expiration
-                          ) || null,
-                  }
-                );
-              };
-
-            await handler.handleCommand(
-              processedMessage,
-              whatsapp,
-              LocalStore
-            );
-
-            prMsg(
-              processedMessage
-            );
           }
+
+          /*
+           * =================================================
+           * SEND MESSAGE
+           * =================================================
+           */
+
+          const originalSendMessage =
+            whatsapp.sendMessage.bind(
+              whatsapp
+            );
+
+          whatsapp.sendMessage =
+            async (
+              jid: string,
+              content: AnyMessageContent,
+              options: any = {}
+            ) => {
+              return originalSendMessage(
+                jid,
+                content,
+                {
+                  ...options,
+
+                  ephemeralExpiration:
+                    processedMessage.isGroup
+                      ? (
+                          processedMessage
+                            .metadata &&
+                          processedMessage
+                            .metadata
+                            .ephemeralDuration
+                        ) || null
+                      : (
+                          (
+                            processedMessage.message as {
+                              [key: string]: any;
+                            }
+                          )[
+                            processedMessage
+                              .type
+                          ]?.contextInfo
+                            ?.expiration
+                        ) || null,
+                }
+              );
+            };
+
+          /*
+           * =================================================
+           * COMANDOS
+           * =================================================
+           */
+
+          await handler.handleCommand(
+            processedMessage,
+            whatsapp,
+            LocalStore
+          );
+
+          prMsg(
+            processedMessage
+          );
         }
       }
 
@@ -521,7 +451,7 @@ const startWhatsApp = async () => {
 
             if (pollCreation) {
               console.log(
-                "got poll update, aggregation: ",
+                "Poll update:",
                 getAggregateVotesInPollMessage(
                   {
                     message:
@@ -543,24 +473,18 @@ const startWhatsApp = async () => {
        */
 
       if (events["contacts.upsert"]) {
-        const update =
-          events["contacts.upsert"];
-
-        for (const contact of update) {
+        for (const contact of events[
+          "contacts.upsert"
+        ]) {
           const id =
             jidNormalizedUser(
               contact.id
             );
 
-          if (
-            LocalStore &&
-            LocalStore.contacts
-          ) {
-            LocalStore.contacts[id] = {
-              ...(contact || {}),
-              isContact: true,
-            };
-          }
+          LocalStore.contacts[id] = {
+            ...(contact || {}),
+            isContact: true,
+          };
         }
       }
 
@@ -568,42 +492,16 @@ const startWhatsApp = async () => {
         for (const contact of events[
           "contacts.update"
         ]) {
-          if (
-            typeof contact.imgUrl !==
-            "undefined"
-          ) {
-            const newUrl =
-              contact.imgUrl === null
-                ? null
-                : await whatsapp
-                    .profilePictureUrl(
-                      contact.id!
-                    )
-                    .catch(
-                      () => null
-                    );
-
-            console.log(
-              `contact ${contact.id} has a new profile pic: ${newUrl}`
-            );
-          }
-
           const id =
             jidNormalizedUser(
               contact.id
             );
 
-          if (
-            LocalStore &&
-            LocalStore.contacts
-          ) {
-            LocalStore.contacts[id] = {
-              ...(LocalStore.contacts?.[
-                id
-              ] || {}),
-              ...(contact || {}),
-            };
-          }
+          LocalStore.contacts[id] = {
+            ...(LocalStore.contacts[id] ||
+              {}),
+            ...(contact || {}),
+          };
         }
       }
 
@@ -614,10 +512,9 @@ const startWhatsApp = async () => {
        */
 
       if (events["groups.upsert"]) {
-        const newGroups =
-          events["groups.upsert"];
-
-        for (const groupMetadata of newGroups) {
+        for (const groupMetadata of events[
+          "groups.upsert"
+        ]) {
           try {
             groupCache.set(
               groupMetadata.id,
@@ -629,7 +526,7 @@ const startWhatsApp = async () => {
             ] = groupMetadata;
           } catch (error) {
             console.error(
-              `[GROUPS.UPSERT] Error adding group ${groupMetadata.id}:`,
+              "Error agregando grupo:",
               error
             );
           }
@@ -637,10 +534,9 @@ const startWhatsApp = async () => {
       }
 
       if (events["groups.update"]) {
-        const updates =
-          events["groups.update"];
-
-        for (const update of updates) {
+        for (const update of events[
+          "groups.update"
+        ]) {
           const id = update.id;
 
           if (!id) {
@@ -658,29 +554,11 @@ const startWhatsApp = async () => {
               metadata
             );
 
-            if (
-              LocalStore.groupMetadata[
-                id
-              ]
-            ) {
-              LocalStore.groupMetadata[
-                id
-              ] = {
-                ...(
-                  LocalStore
-                    .groupMetadata[id] ||
-                  {}
-                ),
-                ...metadata,
-              };
-            } else {
-              LocalStore.groupMetadata[
-                id
-              ] = metadata;
-            }
+            LocalStore.groupMetadata[id] =
+              metadata;
           } catch (error) {
             console.error(
-              `[GROUPS.UPDATE] Error updating group ${id}:`,
+              "Error actualizando grupo:",
               error
             );
           }
@@ -719,113 +597,26 @@ const startWhatsApp = async () => {
               metadata
             );
 
-            LocalStore.groupMetadata[
-              id
-            ] = metadata;
-
-            if (
-              LocalStore.groupMetadata[
-                id
-              ] &&
-              LocalStore.groupMetadata[
-                id
-              ].participants
-            ) {
-              switch (action) {
-                case "add":
-                  LocalStore
-                    .groupMetadata[id]
-                    .participants.push(
-                      ...participants.map(
-                        (jid) => ({
-                          id: jidNormalizedUser(
-                            jid
-                          ),
-                          admin: null,
-                        })
-                      )
-                    );
-                  break;
-
-                case "demote":
-                  for (
-                    const participant of
-                    LocalStore
-                      .groupMetadata[id]
-                      .participants
-                  ) {
-                    const participantId =
-                      jidNormalizedUser(
-                        participant.id
-                      );
-
-                    if (
-                      participants.includes(
-                        participantId
-                      )
-                    ) {
-                      participant.admin =
-                        null;
-                    }
-                  }
-                  break;
-
-                case "promote":
-                  for (
-                    const participant of
-                    LocalStore
-                      .groupMetadata[id]
-                      .participants
-                  ) {
-                    const participantId =
-                      jidNormalizedUser(
-                        participant.id
-                      );
-
-                    if (
-                      participants.includes(
-                        participantId
-                      )
-                    ) {
-                      participant.admin =
-                        "admin";
-                    }
-                  }
-                  break;
-
-                case "remove":
-                  LocalStore
-                    .groupMetadata[id]
-                    .participants =
-                    LocalStore
-                      .groupMetadata[id]
-                      .participants.filter(
-                        (
-                          p: {
-                            id: string;
-                          }
-                        ) =>
-                          !participants.includes(
-                            jidNormalizedUser(
-                              p.id
-                            )
-                          )
-                      );
-                  break;
-              }
-            }
+            LocalStore.groupMetadata[id] =
+              metadata;
           } catch (error) {
             console.error(
-              `[GROUP-PARTICIPANTS.UPDATE] Error processing group ${id}:`,
+              "Error actualizando participantes:",
               error
             );
           }
         }
       }
 
+      /*
+       * =================================================
+       * CHATS
+       * =================================================
+       */
+
       if (events["chats.delete"]) {
         console.log(
-          "chats deleted ",
+          "Chats eliminados:",
           events["chats.delete"]
         );
       }
@@ -834,5 +625,25 @@ const startWhatsApp = async () => {
 
   return whatsapp;
 };
+
+/*
+ * =====================================================
+ * CARGAR COMANDOS
+ * =====================================================
+ */
+
+try {
+  await CmdRegis.load();
+  await CmdRegis.watch();
+
+  console.log(
+    "✅ Comandos cargados correctamente."
+  );
+} catch (error) {
+  console.error(
+    "❌ Error cargando comandos:",
+    error
+  );
+}
 
 startWhatsApp();
