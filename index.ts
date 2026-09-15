@@ -77,7 +77,7 @@ const startWhatsApp = async () => {
   const {
     version,
     isLatest,
-  } = await fetchLatestWaWebVersion();
+  } = await fetchLatestWaWebVersion({});
 
   console.log(
     `WhatsApp Web: ${version.join(".")} | latest: ${isLatest}`
