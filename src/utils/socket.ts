@@ -1,30 +1,30 @@
 import makeWASocket, {
   Browsers,
-  type AnyMessageContent,
+  fetchLatestBaileysVersion,
   type SocketConfig,
   type WASocket,
 } from "baileys";
 
-interface Socket extends WASocket {
-  sendMessage: (
-    jid: string,
-    content: AnyMessageContent,
-    options?: any
-  ) => Promise<any>;
-}
-
 export default async function createSocket(
   config: SocketConfig
 ): Promise<WASocket> {
-  const socketConfig: SocketConfig = {
+  const { version, isLatest } = await fetchLatestBaileysVersion();
+
+  console.log(
+    `WhatsApp Web: ${version.join(".")} | latest: ${isLatest}`
+  );
+
+  return makeWASocket({
     ...config,
 
-    // Navegador oficial/canónico para evitar
-    // problemas con el código de vinculación.
+    version,
+
     browser: Browsers.macOS("Desktop"),
-  };
 
-  const sock: WASocket = makeWASocket(socketConfig);
+    connectTimeoutMs: 60_000,
 
-  return sock;
+    markOnlineOnConnect: false,
+
+    syncFullHistory: false,
+  });
 }
