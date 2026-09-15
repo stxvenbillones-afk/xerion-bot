@@ -11,6 +11,7 @@ import {
   makeCacheableSignalKeyStore,
   proto,
   useMultiFileAuthState,
+  fetchLatestWaWebVersion,
 } from "baileys";
 
 import type {
@@ -67,14 +68,19 @@ const startWhatsApp = async () => {
       "baileys_auth_info"
     );
 
-  const version: [number, number, number] = [
-    2,
-    3000,
-    1033899626,
-  ];
+  /*
+   * =====================================================
+   * OBTENER VERSIÓN ACTUAL DE WHATSAPP WEB
+   * =====================================================
+   */
+
+  const {
+    version,
+    isLatest,
+  } = await fetchLatestWaWebVersion();
 
   console.log(
-    `Using WhatsApp Web v${version.join(".")}`
+    `WhatsApp Web: ${version.join(".")} | latest: ${isLatest}`
   );
 
   const groupCache = new NodeCache({
@@ -157,14 +163,17 @@ const startWhatsApp = async () => {
             console.error(
               "❌ No se encontró OWNER en las variables de Railway."
             );
+
+            pairingRequested = false;
             return;
           }
 
           try {
             /*
-             * Esperamos un momento para que
-             * la conexión inicial esté lista.
+             * Esperar a que el WebSocket
+             * termine de inicializar.
              */
+
             await new Promise((resolve) =>
               setTimeout(resolve, 3000)
             );
@@ -193,16 +202,19 @@ const startWhatsApp = async () => {
               "=========================================="
             );
             console.log(
-              "📱 WhatsApp > Configuración"
+              "📱 EN TU IPHONE:"
             );
             console.log(
-              "   > Dispositivos vinculados"
+              "WhatsApp > Configuración"
             );
             console.log(
-              "   > Vincular dispositivo"
+              "> Dispositivos vinculados"
             );
             console.log(
-              "   > Vincular con número de teléfono"
+              "> Vincular dispositivo"
+            );
+            console.log(
+              "> Vincular con número de teléfono"
             );
             console.log(
               "=========================================="
@@ -254,6 +266,11 @@ const startWhatsApp = async () => {
             statusCode
           );
 
+          /*
+           * 405 = cliente/versión rechazada
+           * 428 = conexión cerrada antes del pairing
+           */
+
           if (
             statusCode !==
             DisconnectReason.loggedOut
@@ -266,7 +283,7 @@ const startWhatsApp = async () => {
 
             setTimeout(() => {
               startWhatsApp();
-            }, 3000);
+            }, 5000);
           } else {
             console.log(
               "❌ La sesión fue cerrada. Vuelve a vincular WhatsApp."
