@@ -6,6 +6,9 @@ interface PermissionsData {
   admins: string[];
   premium: string[];
   banned: string[];
+
+  // Compatibilidad con comandos antiguos
+  staff: string[];
 }
 
 const filePath = path.resolve("permissions.json");
@@ -15,6 +18,7 @@ const defaultData: PermissionsData = {
   admins: [],
   premium: [],
   banned: [],
+  staff: [],
 };
 
 function load(): PermissionsData {
@@ -28,11 +32,34 @@ function load(): PermissionsData {
       return { ...defaultData };
     }
 
+    const saved = JSON.parse(
+      fs.readFileSync(filePath, "utf8")
+    );
+
+    const admins =
+      Array.isArray(saved.admins)
+        ? saved.admins
+        : Array.isArray(saved.staff)
+          ? saved.staff
+          : [];
+
     return {
-      ...defaultData,
-      ...JSON.parse(
-        fs.readFileSync(filePath, "utf8")
-      ),
+      owners: Array.isArray(saved.owners)
+        ? saved.owners
+        : [],
+
+      admins,
+
+      premium: Array.isArray(saved.premium)
+        ? saved.premium
+        : [],
+
+      banned: Array.isArray(saved.banned)
+        ? saved.banned
+        : [],
+
+      // Los comandos antiguos pueden seguir leyendo staff
+      staff: admins,
     };
   } catch {
     return { ...defaultData };
@@ -79,6 +106,12 @@ export function removeOwner(number: string): void {
   save(data);
 }
 
+// Compatibilidad con comandos antiguos.
+// Ya NO existe Owner Principal: todos los Owners son iguales.
+export function isOwnerPrincipal(jid: string): boolean {
+  return isOwner(jid);
+}
+
 // ═══════════════════════════════════════
 // 🛡️ ADMINS
 // ═══════════════════════════════════════
@@ -95,6 +128,8 @@ export function addAdmin(number: string): void {
     data.admins.push(number);
   }
 
+  data.staff = data.admins;
+
   save(data);
 }
 
@@ -105,7 +140,23 @@ export function removeAdmin(number: string): void {
     (x) => x !== number
   );
 
+  data.staff = data.admins;
+
   save(data);
+}
+
+// Compatibilidad con comandos antiguos.
+// Staff = Admin internamente.
+export function isStaff(jid: string): boolean {
+  return isAdmin(jid);
+}
+
+export function addStaff(number: string): void {
+  addAdmin(number);
+}
+
+export function removeStaff(number: string): void {
+  removeAdmin(number);
 }
 
 // ═══════════════════════════════════════
