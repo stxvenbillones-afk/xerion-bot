@@ -24,15 +24,21 @@ cmd.add({
         "demote"
       );
 
-      await m.reply(
-        `✅ @${mentioned.split("@")[0]} ya no es administrador del grupo.`,
-        [mentioned]
+      await sock.sendMessage(
+        m.chat,
+        {
+          text: `✅ @${mentioned.split("@")[0]} ya no es administrador del grupo.`,
+          mentions: [mentioned],
+        },
+        {
+          quoted: m.message,
+        }
       );
     } catch (error) {
       console.error("Error quitando administrador:", error);
 
       await m.reply(
-        "❌ No pude quitarle el administrador a ese usuario. Asegúrate de que el bot sea administrador."
+        "❌ No pude quitarle el administrador a ese usuario."
       );
     }
   },
