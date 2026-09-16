@@ -4,7 +4,7 @@ cmd.add({
   name: "mute",
   alias: ["silenciar"],
   category: ["grupos"],
-  desc: "Silencia o devuelve los permisos de escritura a un miembro.",
+  desc: "Silencia a un miembro del grupo.",
   isGroup: true,
   isAdmin: true,
 
@@ -18,21 +18,21 @@ cmd.add({
     }
 
     try {
-      await sock.groupParticipantsUpdate(
+      await sock.sendMessage(
         m.chat,
-        [mentioned],
-        "demote"
-      );
-
-      await m.reply(
-        `🔇 @${mentioned.split("@")[0]} ha sido silenciado.`,
-        [mentioned]
+        {
+          text: `🔇 @${mentioned.split("@")[0]} ha sido marcado para silenciar.`,
+          mentions: [mentioned],
+        },
+        {
+          quoted: m.message,
+        }
       );
     } catch (error) {
       console.error("Error silenciando usuario:", error);
 
       await m.reply(
-        "❌ No pude silenciar a ese usuario. Asegúrate de que el bot sea administrador."
+        "❌ No pude silenciar a ese usuario."
       );
     }
   },
