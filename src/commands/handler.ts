@@ -4,7 +4,7 @@ import type { CommandContext } from "./map.js";
 
 import {
   isOwner,
-  isStaff,
+  isAdmin,
   isPremium,
   isBanned,
 } from "../permissions.js";
@@ -16,12 +16,10 @@ class CommandHandler {
     store: any,
   ): Promise<void> {
     const sender = processedMessage.sender;
-    const senderNumber = sender.split("@")[0];
 
     if (
       process.env.isSelf === "true" &&
-      !processedMessage.fromMe &&
-      senderNumber !== process.env.OWNER
+      !processedMessage.fromMe
     ) {
       return;
     }
@@ -74,16 +72,14 @@ class CommandHandler {
               a.toLowerCase().trim()
           ) || [];
 
+        const requested =
+          commandName
+            .toLowerCase()
+            .trim();
+
         return (
-          name ===
-            commandName
-              .toLowerCase()
-              .trim() ||
-          aliases.includes(
-            commandName
-              .toLowerCase()
-              .trim()
-          )
+          name === requested ||
+          aliases.includes(requested)
         );
       });
 
@@ -93,12 +89,13 @@ class CommandHandler {
 
     try {
       if (foundCommand.run) {
-        if (
-          !this.checkPermissions(
+        const allowed =
+          this.checkPermissions(
             foundCommand,
             processedMessage
-          )
-        ) {
+          );
+
+        if (!allowed) {
           await processedMessage.reply(
             "❌ No tienes permiso para utilizar este comando."
           );
@@ -156,69 +153,83 @@ class CommandHandler {
     const sender =
       message.sender;
 
-    const senderNumber =
-      sender.split("@")[0];
-
     /*
-     * OWNER PRINCIPAL
+     * 👑 OWNER
      *
-     * fromMe = mensaje enviado
-     * directamente desde la cuenta
-     * de WhatsApp vinculada al bot.
+     * fromMe permite que la cuenta
+     * que tiene conectado XERION
+     * pueda administrar el bot.
      */
-    const isPrincipalOwner =
+    const owner =
       message.fromMe ||
-      senderNumber ===
-        process.env.OWNER;
+      isOwner(sender);
 
     /*
-     * BAN
+     * 🛡️ ADMIN
+     */
+    const admin =
+      isAdmin(sender);
+
+    /*
+     * ⭐ PREMIUM
+     */
+    const premium =
+      isPremium(sender);
+
+    /*
+     * 🚫 BANEADO
+     *
+     * Un Owner puede utilizar
+     * el bot aunque aparezca
+     * en la lista de baneados.
      */
     if (
       isBanned(sender) &&
-      !isPrincipalOwner
+      !owner
     ) {
       return false;
     }
 
     /*
-     * OWNER
+     * 👑 COMANDOS DE OWNER
      */
     if (
       command.isOwner &&
-      !isPrincipalOwner &&
-      !isOwner(sender)
+      !owner
     ) {
       return false;
     }
 
     /*
-     * STAFF
+     * 🛡️ COMANDOS DE ADMIN
+     *
+     * Owner también tiene acceso.
      */
     if (
-      command.isStaff &&
-      !isPrincipalOwner &&
-      !isStaff(sender) &&
-      !isOwner(sender)
+      command.isAdmin &&
+      !owner &&
+      !admin
     ) {
       return false;
     }
 
     /*
-     * PREMIUM
+     * ⭐ COMANDOS PREMIUM
+     *
+     * Owner y Admin también
+     * tienen acceso.
      */
     if (
       command.isPremium &&
-      !isPrincipalOwner &&
-      !isPremium(sender) &&
-      !isStaff(sender) &&
-      !isOwner(sender)
+      !owner &&
+      !admin &&
+      !premium
     ) {
       return false;
     }
 
     /*
-     * GRUPO
+     * 👥 SOLO GRUPOS
      */
     if (
       command.isGroup &&
@@ -228,7 +239,7 @@ class CommandHandler {
     }
 
     /*
-     * PRIVADO
+     * 💬 SOLO PRIVADO
      */
     if (
       command.isPrivate &&
@@ -238,7 +249,7 @@ class CommandHandler {
     }
 
     /*
-     * SELF
+     * 🤖 SOLO SELF
      */
     if (
       command.isSelf &&
