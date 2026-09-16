@@ -1,5 +1,5 @@
 {
-  "name": "botwa",
+  "name": "xorion-bot",
   "main": "dist/index.js",
   "type": "module",
   "private": true,
@@ -23,11 +23,13 @@
     "os": "^0.1.2",
     "pino": "^9.3.2",
     "qrcode-terminal": "^0.12.0",
+    "sharp": "^0.34.3",
     "strip-comments": "^2.0.1",
     "ws": "^8.18.3"
   },
   "trustedDependencies": [
     "baileys",
-    "protobufjs"
+    "protobufjs",
+    "sharp"
   ]
 }
