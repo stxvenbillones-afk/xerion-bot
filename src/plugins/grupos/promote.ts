@@ -24,9 +24,15 @@ cmd.add({
         "promote"
       );
 
-      await m.reply(
-        `✅ @${mentioned.split("@")[0]} ahora es administrador del grupo.`,
-        [mentioned]
+      await sock.sendMessage(
+        m.chat,
+        {
+          text: `✅ @${mentioned.split("@")[0]} ahora es administrador del grupo.`,
+          mentions: [mentioned],
+        },
+        {
+          quoted: m.message,
+        }
       );
     } catch (error) {
       console.error("Error promoviendo usuario:", error);
