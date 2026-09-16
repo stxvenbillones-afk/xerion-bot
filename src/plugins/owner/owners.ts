@@ -5,31 +5,32 @@ cmd.add({
   name: "owners",
   alias: ["ownerlist"],
   category: ["owner"],
-  desc: "Muestra la lista de Owners de XERION BOT.",
+  desc: "Muestra la lista de Owners.",
   isOwner: true,
 
   async run({ m }: CommandContext) {
     const data = getPermissions();
-    const principal = process.env.OWNER || "";
 
-    const owners = data.owners.filter(
-      (number) => number !== principal,
-    );
-
-    let text = "👑 *XERION BOT — OWNERS*\n\n";
-
-    text += `👑 Owner Principal: +${principal}\n\n`;
-
-    if (owners.length === 0) {
-      text += "👑 Owners adicionales: Ninguno";
-    } else {
-      text += "👑 Owners adicionales:\n";
-
-      owners.forEach((number, index) => {
-        text += `${index + 1}. +${number}\n`;
-      });
+    if (!data.owners.length) {
+      return m.reply(
+        "👑 *OWNERS DE XERION BOT*\n\nNo hay Owners añadidos todavía."
+      );
     }
 
-    return m.reply(text);
+    const list = data.owners
+      .map((number, index) => `${index + 1}. @${number}`)
+      .join("\n");
+
+    return m.reply(
+      `╭━━━━━━━━━━━━━━━━━━╮
+┃ 👑 𝗢𝗪𝗡𝗘𝗥𝗦 𝗗𝗘 𝗫𝗘𝗥𝗜𝗢𝗡
+╰━━━━━━━━━━━━━━━━━━╯
+
+${list}
+
+╰━━━━━━━━━━━━━━━━━━╯
+┃ Total: ${data.owners.length}
+╰━━━━━━━━━━━━━━━━━━╯`
+    );
   },
 });
