@@ -24,9 +24,15 @@ cmd.add({
         "remove"
       );
 
-      await m.reply(
-        `✅ @${mentioned.split("@")[0]} ha sido expulsado del grupo.`,
-        [mentioned]
+      await sock.sendMessage(
+        m.chat,
+        {
+          text: `✅ @${mentioned.split("@")[0]} ha sido expulsado del grupo.`,
+          mentions: [mentioned],
+        },
+        {
+          quoted: m.message,
+        }
       );
     } catch (error) {
       console.error("Error expulsando usuario:", error);
