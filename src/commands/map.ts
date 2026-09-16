@@ -1,4 +1,4 @@
-import type { ProcMsg } from '../utils/msg.js';
+import type { ProcMsg } from "../utils/msg.js";
 
 export interface CommandContext {
   m: ProcMsg;
@@ -16,7 +16,7 @@ export interface Command {
   alias?: string[];
   isOwner?: boolean;
   isGroup?: boolean;
-  isStaff?: boolean;
+  isAdmin?: boolean;
   isPremium?: boolean;
   isPrivate?: boolean;
   isSelf?: boolean;
