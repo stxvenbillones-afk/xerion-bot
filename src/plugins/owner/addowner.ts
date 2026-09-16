@@ -1,9 +1,5 @@
 import cmd, { type CommandContext } from "../../commands/map.js";
-import {
-  addOwner,
-  isOwnerPrincipal,
-  isOwner,
-} from "../../permissions.js";
+import { addOwner, isOwner } from "../../permissions.js";
 
 cmd.add({
   name: "addowner",
@@ -13,14 +9,8 @@ cmd.add({
   isOwner: true,
 
   async run({ m, args }: CommandContext) {
-    // Solo el Owner Principal puede añadir Owners.
-    if (!isOwnerPrincipal(m.sender)) {
-      return m.reply("❌ Solo el Owner Principal puede utilizar este comando.");
-    }
-
     let number = "";
 
-    // Primero intenta obtener una mención.
     if (m.mentionedJids && m.mentionedJids.length > 0) {
       number = m.mentionedJids[0].split("@")[0];
     } else if (args?.[0]) {
@@ -29,7 +19,7 @@ cmd.add({
 
     if (!number) {
       return m.reply(
-        "❌ Debes mencionar al usuario.\n\nEjemplo:\n.addowner @usuario",
+        "❌ Debes mencionar al usuario.\n\nEjemplo:\n.addowner @usuario"
       );
     }
 
@@ -42,7 +32,7 @@ cmd.add({
     addOwner(number);
 
     return m.reply(
-      `👑 @${number} ahora es Owner de XERION BOT.`,
+      `👑 @${number} ahora es Owner de XERION BOT.`
     );
   },
 });
