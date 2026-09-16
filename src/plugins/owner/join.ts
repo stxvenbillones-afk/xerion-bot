@@ -8,37 +8,53 @@ cmd.add({
   isOwner: true,
 
   async run({ m, args, sock }: CommandContext) {
-    const link = args[0]?.trim();
+    const link = args.join(" ").trim();
 
     if (!link) {
       return m.reply(
-        "❌ Debes proporcionar el enlace del grupo.\n\nEjemplo:\n.join https://chat.whatsapp.com/XXXXXXXX",
+        "❌ Debes proporcionar el enlace del grupo.\n\n" +
+        "Ejemplo:\n" +
+        ".join https://chat.whatsapp.com/XXXXXXXXXXXX"
       );
     }
 
     const match = link.match(
-      /chat\.whatsapp\.com\/([A-Za-z0-9_-]+)/,
+      /chat\.whatsapp\.com\/([A-Za-z0-9_-]+)/
     );
 
-    if (!match) {
+    if (!match?.[1]) {
       return m.reply(
-        "❌ El enlace de WhatsApp no es válido.",
+        "❌ El enlace de WhatsApp no es válido."
       );
     }
 
-    try {
-      const inviteCode = match[1];
+    const inviteCode = match[1];
 
-      await sock.groupAcceptInvite(inviteCode);
+    try {
+      const groupJid =
+        await sock.groupAcceptInvite(inviteCode);
 
       return m.reply(
-        "✅ *XERION BOT* ha entrado correctamente al grupo.",
+        `╭━━━━━━━━━━━━━━━━━━╮
+┃ 👥 𝗚𝗥𝗨𝗣𝗢 𝗨𝗡𝗜𝗗𝗢
+╰━━━━━━━━━━━━━━━━━━╯
+
+┃ ✅ XERION BOT entró al grupo.
+┃ 🆔 ID: ${groupJid}
+
+╰━━━━━━━━━━━━━━━━━━╯
+      𝗫𝗘𝗥𝗜𝗢𝗡 𝗕𝗢𝗧`
       );
     } catch (error) {
-      console.error("Error entrando al grupo:", error);
+      console.error(
+        "Error entrando al grupo:",
+        error
+      );
 
       return m.reply(
-        "❌ No pude entrar al grupo. Verifica que el enlace siga activo.",
+        "❌ No pude entrar al grupo.\n\n" +
+        "El enlace puede haber expirado, " +
+        "ser inválido o el grupo puede no permitir nuevas entradas."
       );
     }
   },
