@@ -14,17 +14,27 @@ export interface Command {
   name: string;
   category?: string[];
   alias?: string[];
+
   isOwner?: boolean;
-  isGroup?: boolean;
   isAdmin?: boolean;
+  isStaff?: boolean;
   isPremium?: boolean;
+
+  isGroup?: boolean;
   isPrivate?: boolean;
   isSelf?: boolean;
+
   desc?: string;
   usage?: string;
   example?: string;
-  run?: (ctx: CommandContext) => Promise<void> | void;
-  middleware?: (ctx: CommandContext) => Promise<void> | void;
+
+  run?: (
+    ctx: CommandContext
+  ) => Promise<void> | void;
+
+  middleware?: (
+    ctx: CommandContext
+  ) => Promise<void> | void;
 }
 
 class CmdMap {
